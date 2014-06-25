@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+_print_usage () {
+    echo "Usage:" 2>&1
+    echo "  $ movie2gif [-d|--delay delay] file|url file" 2>&1
+}
+
+if ! which ffmpeg > /dev/null; then
+    echo "Please install ffmpeg" 2>&1
+    exit 1
+fi
+
+if ! which gm > /dev/null; then
+    echo "Please install graphicsmagick" 2>&1
+    exit 1
+fi
+
+
+delay=5
+in_file=
+out_file=
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--delay)
+            delay=$2
+            shift
+            shift
+            ;;
+        *)
+            if [ "$in_file" == "" ]; then
+                in_file=$1
+            else
+                out_file=$1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [ "$in_file" == "" -o "$out_file" == "" ]; then
+    _print_usage
+    exit 1
+fi
+
+tmpdir=$(mktemp -d temp.XXXXXX)
+copy_of_in_file=$(mktemp -t temp.XXXXXX)
+_clean () {
+    rm -rf $tmpdir
+    rm -rf $copy_of_in_file
+}
+trap _clean exit
+
+if echo $in_file | grep -E '^https?://' > /dev/null;  then
+    curl "$in_file" > $copy_of_in_file
+else
+    cp $in_file $copy_of_in_file
+fi
+
+ffmpeg -i $copy_of_in_file -r $((60 / $delay)) $tmpdir/%06d.jpg
+gm convert -delay $delay $(find $tmpdir -type f) $out_file
